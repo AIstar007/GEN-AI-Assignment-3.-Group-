@@ -35,17 +35,23 @@ graph TD
     B --> C[📊 ChromaDB Vector Search]
     C --> D[🧠 Groq LLM Processing]
     D --> E[✅ Validation & Safety]
-    E --> F[📝 Draft Generation]
-    F --> G[🔒 PII Protection]
-    G --> H[📤 Auto-Reply Send]
+    E --> F{🤔 Confidence Check}
+    F -->|High Confidence| G[📝 Draft Generation]
+    F -->|Low Confidence| L[👨‍💼 Human Escalation]
+    G --> H[🔒 PII Protection]
+    H --> I[📤 Auto-Reply Send]
     
-    I[📋 Airline Policy] --> C
-    J[🛡️ Safety Checks] --> E
-    K[📊 Metrics & Logs] --> H
+    J[📋 Airline Policy] --> C
+    K[🛡️ Safety Checks] --> E
+    M[📊 Metrics & Logs] --> I
+    L --> N[📋 Manual Review Queue]
+    N --> O[👤 Human Agent Response]
     
     style A fill:#e1f5fe
     style D fill:#f3e5f5
-    style H fill:#e8f5e8
+    style I fill:#e8f5e8
+    style L fill:#fff3e0
+    style O fill:#f1f8e9
 ```
 
 </div>
@@ -59,6 +65,7 @@ graph TD
 | 📧 **Gmail Integration** | Google API OAuth | Seamless inbox processing and auto-replies |
 | 🛡️ **Safety First** | Input sanitization + PII protection | Enterprise-grade security and compliance |
 | 📊 **Agent Orchestration** | LangGraph Framework | Sophisticated multi-step workflow management |
+| 👨‍💼 **Human Escalation** | Confidence-based routing | Ensures complex issues get human attention |
 | 📈 **Performance Tracking** | Built-in metrics and persistence | Complete visibility into system performance |
 
 ---
@@ -91,7 +98,9 @@ Our sophisticated multi-stage architecture ensures every email receives the perf
 
 #### **5. 📊 Intelligent Orchestration**
 - **Agent Graph**: Sophisticated workflow management with LangGraph
-- **Error Recovery**: Robust failure handling and escalation
+- **Confidence Assessment**: AI evaluates response quality and certainty
+- **Smart Escalation**: Automatic human handoff for complex or ambiguous cases
+- **Error Recovery**: Robust failure handling and retry mechanisms
 - **Performance Metrics**: Real-time monitoring and analytics
 
 ---
@@ -172,10 +181,17 @@ CHROMA_COLLECTION_NAME=airline_policies
 GMAIL_BATCH_SIZE=10
 AUTO_REPLY_ENABLED=true
 
-# 🛡️ Security Settings
+# 🛡️ Enhanced Security Settings
 ENABLE_PII_DETECTION=true
 SANITIZE_INPUT=true
 MAX_EMAIL_LENGTH=10000
+CONFIDENCE_THRESHOLD=0.8
+ESCALATION_ENABLED=true
+
+# 👨‍💼 Human Escalation Configuration
+HUMAN_REVIEW_QUEUE_SIZE=50
+ESCALATION_NOTIFICATION=true
+MANUAL_REVIEW_TIMEOUT=2h
 
 # 📈 Performance Tuning
 RAG_TOP_K_RESULTS=5
@@ -255,29 +271,36 @@ intelligent_reply = draft_reply(inquiry)
 print(f"RAG-Enhanced Response: {intelligent_reply}")
 ```
 
-### **📊 Advanced Agent Orchestration**
+### **📊 Advanced Agent Orchestration with Human Fallback**
 ```python
-# LangGraph-powered sophisticated workflows
+# LangGraph-powered sophisticated workflows with human escalation
 from app.agent.agent_graph import build_agent_graph, run_with_graph
 
-# Create custom agent pipeline
+# Create custom agent pipeline with human intervention
 graph = build_agent_graph(
     rag_retrieve=custom_retriever,
     llm_call=groq_llm_handler,
     validator=safety_validator,
     gmail_send=email_sender,
-    escalate_handler=human_escalation,
+    escalate_handler=human_escalation_queue,  # Human intervention system
     pii_redactor=privacy_protector,
+    confidence_threshold=0.8,  # Trigger human review if confidence < 80%
     prompt_template="Context: {docs}\nCustomer: {email}\nResponse:",
     rewrite_prompt_template="Improve this response: {draft}\nReason: {reason}"
 )
 
-# Execute intelligent workflow
+# Execute intelligent workflow with automatic escalation
 final_state = run_with_graph(
     graph, 
-    {"email_id": "inquiry_001", "email_content": "complex_customer_query"}, 
+    {"email_id": "complex_inquiry_001", "email_content": "unusual_customer_scenario"}, 
     run_id="production_run_001"
 )
+
+# Check if human intervention was triggered
+if final_state.get('escalated_to_human'):
+    print("Complex case forwarded to human agent for personalized handling")
+else:
+    print(f"AI successfully handled: {final_state['final_reply']}")
 ```
 
 ---
@@ -332,16 +355,25 @@ sequenceDiagram
     participant ChromaDB as 📊 ChromaDB
     participant Groq as 🧠 Groq LLM
     participant Safety as 🛡️ Safety Layer
+    participant Human as 👤 Human Agent
     
     Gmail->>Agent: New unread email
     Agent->>ChromaDB: Search relevant policies
     ChromaDB-->>Agent: Return policy context
     Agent->>Groq: Generate response with context
-    Groq-->>Agent: Draft reply
-    Agent->>Safety: Validate & sanitize
-    Safety-->>Agent: Approved response
-    Agent->>Gmail: Send auto-reply
-    Agent->>Agent: Log metrics & state
+    Groq-->>Agent: Draft reply + confidence score
+    Agent->>Safety: Validate & assess confidence
+    
+    alt High Confidence Response
+        Safety-->>Agent: Approved auto-response
+        Agent->>Gmail: Send auto-reply
+        Agent->>Agent: Log success metrics
+    else Low Confidence/Complex Issue
+        Safety-->>Agent: Escalation required
+        Agent->>Human: Forward to manual review queue
+        Human-->>Gmail: Send personalized response
+        Agent->>Agent: Log escalation metrics
+    end
 ```
 
 ---
